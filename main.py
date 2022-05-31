@@ -2,6 +2,7 @@ import tkinter as tk
 from random import shuffle
 from tkinter.messagebox import showinfo, showerror
 
+from mybutton import MyButton
 
 color_text = {
     1: '#0006b3',
@@ -15,33 +16,18 @@ color_text = {
 }
 
 
-class MyButton(tk.Button):
-
-    def __init__(self, master, x, y, number=0, *args, **kwargs):
-        super(MyButton, self).__init__(master, width=3, font='Calibri 15 bold', *args, **kwargs)
-        self.x = x
-        self.y = y
-        self.number = number
-        self.is_mine = False
-        self.count_mine = 0
-        self.is_open = False
-        self.count_flag = 0
-
-    def __repr__(self):
-        return f'MyButton x={self.x} y={self.y} num={self.number} {self.is_mine}'
-
-
 class MineSweeper:
 
-    ROW = 7
-    COLUMN = 10
+    ROW = 3
+    COLUMN = 3
     window = tk.Tk()
     window.geometry('500x200')
-    MINES = 10
+    MINES = 3
     FLAG = MINES
+    NOT_MINE = (ROW * COLUMN) - MINES
     IS_GAME_OVER = False
-    IS_FIRST_CLICK = True
     IS_GAME_WIN = False
+    IS_FIRST_CLICK = True
 
     def __init__(self):
         # инициализация игры
@@ -52,13 +38,17 @@ class MineSweeper:
             for j in range(MineSweeper.COLUMN + 2):
                 btn = MyButton(MineSweeper.window, x=i, y=j, number=0)
                 btn.config(command=lambda button=btn: self.click(button))  # lambda - посредник для вызова self.click
-                btn.bind('<Button-3>', self.right_click)  # нажатие правой кнопки мыши
+                btn.bind('<Button-3>', self.flag)  # нажатие правой кнопки мыши
                 temp.append(btn)
             self.buttons.append(temp)
-        flag_count = tk.Label(self.window, text='Количество мин')
-        flag_count.pack()
 
-    def right_click(self, event): # реализация правого клика
+        statusbar = tk.Label(self.window, text=f"Мины {MineSweeper.FLAG}", bd=1,
+                             relief=tk.SUNKEN, anchor=tk.W)
+
+        statusbar.grid(row=0, column=1)
+        #statusbar = s
+
+    def flag(self, event): # реализация правого клика
         cur_button = event.widget
 
         if MineSweeper.IS_GAME_OVER:
@@ -73,13 +63,13 @@ class MineSweeper:
             cur_button['text'] = ''
             cur_button['state'] = 'normal'
 
-    def refreshLabels(self):
-        self.labels["flags"].config(text = "Flags: "+str(self.FLAG))
-        self.labels["mines"].config(text = "Mines: "+str(self.MINES))
-
     def click(self, clicked_button: MyButton):
+        counter = 0
 
         if MineSweeper.IS_GAME_OVER:
+            return None
+
+        if MineSweeper.IS_GAME_WIN:
             return None
 
         if MineSweeper.IS_FIRST_CLICK:
@@ -92,8 +82,8 @@ class MineSweeper:
             clicked_button.config(text='*', background='red', disabledforeground='black')
             clicked_button.is_open = True
             MineSweeper.IS_GAME_OVER = True
-            showinfo('Game over', 'Вы проиграли')
-            for i in range(1, MineSweeper.ROW + 1):
+            showinfo('Game over', 'Вы проиграли.')
+            for i in range(1, MineSweeper.ROW + 1): # показывает, где были бомбы
                 for j in range(1, MineSweeper.COLUMN + 1):
                     btn = self.buttons[i][j]
                     if btn.is_mine:
@@ -111,11 +101,20 @@ class MineSweeper:
         clicked_button.config(state='disabled')  # нельзя нажать второй раз
         clicked_button.config(relief=tk.SUNKEN)  # кнопка нажата
 
+        # проверка выигрыша
+        for i in range(1, MineSweeper.ROW + 1):  # показывает, где были бомбы
+            for j in range(1, MineSweeper.COLUMN + 1):
+                btn = self.buttons[i][j]
+                if btn.is_open:
+                    counter += 1
+                    if counter == self.NOT_MINE:
+                        MineSweeper.IS_GAME_WIN = True
+                        showinfo('You are winner', 'Вы выиграли!')
+
     def breadth_first_search(self, btn: MyButton):
 
         queue = [btn]
         while queue:
-
             cur_btn = queue.pop()
             color = color_text.get(cur_btn.count_mine, 'black')
             if cur_btn.count_mine:
@@ -138,11 +137,15 @@ class MineSweeper:
                             queue.append(next_btn)
 
     def reload(self):
+        """
+        Перезапуск игры
+        """
         [child.destroy() for child in self.window.winfo_children()]  # очищение окна
         self.__init__()
         self.create_widgets()
         MineSweeper.IS_FIRST_CLICK = True
         MineSweeper.IS_GAME_OVER = False
+        MineSweeper.IS_GAME_WIN = False
 
     def create_set_window(self):
         set_window = tk.Toplevel(self.window)
@@ -169,10 +172,23 @@ class MineSweeper:
 
     def save_set(self, row: tk.Entry, column: tk.Entry, mine: tk.Entry):
 
+        # Ограничение вводимых величин
         try:
             int(row.get()), int(column.get()), int(mine.get())
         except ValueError:
             showerror('Ошибка', 'Вы ввели неправильное значение')
+            return
+
+        if int(row.get()) <= 0 or int(column.get()) <= 0 or int(mine.get()) <= 0:
+            showerror('Ошибка', 'Величины должны быть больше 0')
+            return
+
+        if int(row.get()) * int(column.get()) <= int(mine.get()):
+            showerror('Ошибка', 'Мин должно быть меньше, чем клеток')
+            return
+
+        if int(row.get()) > 20 or int(column.get()) > 20:
+            showerror('Ошибка', 'Слишком большое поле')
             return
 
         MineSweeper.ROW = int(row.get())
@@ -261,7 +277,6 @@ class MineSweeper:
                                 count_mine += 1
 
                 btn.count_mine = count_mine
-
 
     @staticmethod
     def get_mines_places(exclude_num: int):
